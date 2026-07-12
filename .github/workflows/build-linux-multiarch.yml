@@ -42,8 +42,10 @@ jobs:
 
       - if: ${{ matrix.backend.name == 'vulkan' }}
         run: |
-          sudo apt-get update
-          sudo apt-get install -y build-essential libssl-dev mesa-vulkan-drivers vulkan-sdk glslc
+          wget -qO - https://packages.lunarg.com/lunarg-signing-key-pub.asc | sudo apt-key add -
+          sudo wget -qO /etc/apt/sources.list.d/lunarg-vulkan-jammy.list https://packages.lunarg.com/vulkan/lunarg-vulkan-jammy.list
+          sudo apt-get update -y
+          sudo apt-get install -y build-essential mesa-vulkan-drivers vulkan-sdk libssl-dev
 
       - uses: ggml-org/ccache-action@v1.2.21
         with:
@@ -98,7 +100,7 @@ jobs:
           echo "CXX=g++-14" >> "$GITHUB_ENV"
 
       - if: ${{ matrix.backend.name == 'vulkan' }}
-        run: sudo apt-get install -y libvulkan-dev spirv-headers spirv-tools
+        run: sudo apt-get install -y glslc libvulkan-dev spirv-headers
 
       - uses: ggml-org/ccache-action@v1.2.21
         with:
