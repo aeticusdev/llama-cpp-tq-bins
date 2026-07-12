@@ -137,12 +137,18 @@ jobs:
       - run: |
           cmake -B build \
             -DCMAKE_BUILD_TYPE=Release \
-            -DCMAKE_C_FLAGS="-m32" \
-            -DCMAKE_CXX_FLAGS="-m32" \
+            -DCMAKE_C_FLAGS="-m32 -march=i686 -mno-bmi2 -mno-avx2 -mno-avx -mno-sse4.2 -mno-fma -mno-f16c" \
+            -DCMAKE_CXX_FLAGS="-m32 -march=i686 -mno-bmi2 -mno-avx2 -mno-avx -mno-sse4.2 -mno-fma -mno-f16c" \
             -DCMAKE_INSTALL_RPATH='$ORIGIN' \
             -DCMAKE_BUILD_WITH_INSTALL_RPATH=ON \
             -DGGML_NATIVE=OFF \
             -DGGML_OPENMP=OFF \
+            -DGGML_BMI2=OFF \
+            -DGGML_AVX2=OFF \
+            -DGGML_AVX=OFF \
+            -DGGML_SSE42=OFF \
+            -DGGML_FMA=OFF \
+            -DGGML_F16C=OFF \
             -DLLAMA_OPENSSL=OFF \
             ${{ env.CMAKE_BASE_ARGS }}
 
@@ -159,6 +165,16 @@ jobs:
           path: turboquant-plus-${{ inputs.release_tag || github.ref_name }}-linux-x86-cpu.tar.gz
 
   linux-arm32:
+    strategy:
+      fail-fast: false
+      matrix:
+        backend:
+          - name: cpu
+            cmake_flags: "-DGGML_OPENMP=OFF"
+            artifact_suffix: linux-arm32-cpu
+          - name: vulkan
+            cmake_flags: "-DGGML_VULKAN=ON -DGGML_OPENMP=OFF"
+            artifact_suffix: linux-arm32-vulkan
     runs-on: ubuntu-22.04
     steps:
       - uses: actions/checkout@v6
@@ -175,7 +191,12 @@ jobs:
           deb [arch=armhf] http://ports.ubuntu.com/ubuntu-ports/ jammy-security main universe
           EOF
           sudo apt-get update || true
-          sudo apt-get install -y build-essential gcc-arm-linux-gnueabihf g++-arm-linux-gnueabihf
+
+      - run: |
+          sudo apt-get install -y build-essential gcc-arm-linux-gnueabihf g++-arm-linux-gnueabihf libssl-dev:armhf
+
+      - if: ${{ matrix.backend.name == 'vulkan' }}
+        run: sudo apt-get install -y glslang-tools libvulkan-dev:armhf spirv-headers
 
       - run: |
           cmake -B build \
@@ -186,22 +207,25 @@ jobs:
             -DCMAKE_CXX_COMPILER=arm-linux-gnueabihf-g++ \
             -DCMAKE_INSTALL_RPATH='$ORIGIN' \
             -DCMAKE_BUILD_WITH_INSTALL_RPATH=ON \
-            -DGGML_NATIVE=OFF \
-            -DGGML_OPENMP=OFF \
+            -DCMAKE_FIND_ROOT_PATH=/usr/lib/arm-linux-gnueabihf \
+            -DCMAKE_FIND_ROOT_PATH_MODE_PROGRAM=NEVER \
+            -DCMAKE_FIND_ROOT_PATH_MODE_LIBRARY=ONLY \
+            -DCMAKE_FIND_ROOT_PATH_MODE_INCLUDE=BOTH \
             -DLLAMA_OPENSSL=OFF \
+            ${{ matrix.backend.cmake_flags }} \
             ${{ env.CMAKE_BASE_ARGS }}
 
       - run: cmake --build build --config Release -j $(nproc)
 
       - run: |
           cp LICENSE ./build/bin/
-          tar -czvf turboquant-plus-${{ inputs.release_tag || github.ref_name }}-linux-arm32-cpu.tar.gz \
+          tar -czvf turboquant-plus-${{ inputs.release_tag || github.ref_name }}-${{ matrix.backend.artifact_suffix }}.tar.gz \
             --transform "s,^\.,turboquant-plus-${{ inputs.release_tag || github.ref_name }}," -C ./build/bin .
 
       - uses: actions/upload-artifact@v6
         with:
-          name: linux-arm32-cpu
-          path: turboquant-plus-${{ inputs.release_tag || github.ref_name }}-linux-arm32-cpu.tar.gz
+          name: ${{ matrix.backend.artifact_suffix }}
+          path: turboquant-plus-${{ inputs.release_tag || github.ref_name }}-${{ matrix.backend.artifact_suffix }}.tar.gz
 
   windows-x86_64:
     strategy:
@@ -245,6 +269,16 @@ jobs:
           path: turboquant-plus-${{ inputs.release_tag || github.ref_name }}-${{ matrix.backend.artifact_suffix }}.zip
 
   windows-x86:
+    strategy:
+      fail-fast: false
+      matrix:
+        backend:
+          - name: cpu
+            cmake_flags: ""
+            artifact_suffix: windows-x86-cpu
+          - name: vulkan
+            cmake_flags: "-DGGML_VULKAN=ON"
+            artifact_suffix: windows-x86-vulkan
     runs-on: windows-2022
     steps:
       - uses: actions/checkout@v6
@@ -254,6 +288,13 @@ jobs:
           fetch-depth: 0
 
       - run: choco install ninja
+
+      - if: ${{ matrix.backend.name == 'vulkan' }}
+        run: |
+          curl.exe -o $env:RUNNER_TEMP\VulkanSDK-Installer.exe -L "https://sdk.lunarg.com/sdk/download/${env:VULKAN_VERSION}/windows/vulkansdk-windows-X64-${env:VULKAN_VERSION}.exe"
+          & "$env:RUNNER_TEMP\VulkanSDK-Installer.exe" --accept-licenses --default-answer --confirm-command install
+          Add-Content $env:GITHUB_ENV "VULKAN_SDK=C:\VulkanSDK\${env:VULKAN_VERSION}"
+          Add-Content $env:GITHUB_PATH "C:\VulkanSDK\${env:VULKAN_VERSION}\bin"
 
       - run: |
           mkdir -Force cmake
@@ -271,20 +312,31 @@ jobs:
             -G "Ninja Multi-Config" `
             -D CMAKE_TOOLCHAIN_FILE=cmake/x86-windows-llvm.cmake `
             -DGGML_NATIVE=OFF `
+            ${{ matrix.backend.cmake_flags }} `
             ${{ env.CMAKE_BASE_ARGS }}
 
       - run: cmake --build build --config Release -j ${env:NUMBER_OF_PROCESSORS}
 
       - run: |
           cp LICENSE ./build/bin/Release/
-          7z a turboquant-plus-${{ inputs.release_tag || github.ref_name }}-windows-x86-cpu.zip .\build\bin\Release\*
+          7z a turboquant-plus-${{ inputs.release_tag || github.ref_name }}-${{ matrix.backend.artifact_suffix }}.zip .\build\bin\Release\*
 
       - uses: actions/upload-artifact@v6
         with:
-          name: windows-x86-cpu
-          path: turboquant-plus-${{ inputs.release_tag || github.ref_name }}-windows-x86-cpu.zip
+          name: ${{ matrix.backend.artifact_suffix }}
+          path: turboquant-plus-${{ inputs.release_tag || github.ref_name }}-${{ matrix.backend.artifact_suffix }}.zip
 
   windows-arm64:
+    strategy:
+      fail-fast: false
+      matrix:
+        backend:
+          - name: cpu
+            cmake_flags: ""
+            artifact_suffix: windows-arm64-cpu
+          - name: vulkan
+            cmake_flags: "-DGGML_VULKAN=ON"
+            artifact_suffix: windows-arm64-vulkan
     runs-on: windows-2022
     steps:
       - uses: actions/checkout@v6
@@ -295,23 +347,31 @@ jobs:
 
       - run: choco install ninja
 
+      - if: ${{ matrix.backend.name == 'vulkan' }}
+        run: |
+          curl.exe -o $env:RUNNER_TEMP\VulkanSDK-Installer.exe -L "https://sdk.lunarg.com/sdk/download/1.4.350.0/warm/vulkansdk-windows-ARM64-1.4.350.0.exe"
+          & "$env:RUNNER_TEMP\VulkanSDK-Installer.exe" --accept-licenses --default-answer --confirm-command install
+          Add-Content $env:GITHUB_ENV "VULKAN_SDK=C:\VulkanSDK\1.4.350.0"
+          Add-Content $env:GITHUB_PATH "C:\VulkanSDK\1.4.350.0\bin"
+
       - run: |
           cmake -S . -B build `
             -G "Ninja Multi-Config" `
             -D CMAKE_TOOLCHAIN_FILE=cmake/arm64-windows-llvm.cmake `
             -DGGML_NATIVE=OFF `
+            ${{ matrix.backend.cmake_flags }} `
             ${{ env.CMAKE_BASE_ARGS }}
 
       - run: cmake --build build --config Release -j ${env:NUMBER_OF_PROCESSORS}
 
       - run: |
           cp LICENSE ./build/bin/Release/
-          7z a turboquant-plus-${{ inputs.release_tag || github.ref_name }}-windows-arm64-cpu.zip .\build\bin\Release\*
+          7z a turboquant-plus-${{ inputs.release_tag || github.ref_name }}-${{ matrix.backend.artifact_suffix }}.zip .\build\bin\Release\*
 
       - uses: actions/upload-artifact@v6
         with:
-          name: windows-arm64-cpu
-          path: turboquant-plus-${{ inputs.release_tag || github.ref_name }}-windows-arm64-cpu.zip
+          name: ${{ matrix.backend.artifact_suffix }}
+          path: turboquant-plus-${{ inputs.release_tag || github.ref_name }}-${{ matrix.backend.artifact_suffix }}.zip
 
   windows-cuda:
     strategy:

@@ -66,6 +66,16 @@ jobs:
           path: turboquant-plus-${{ github.ref_name }}-${{ matrix.backend.artifact_suffix }}.zip
 
   windows-arm64:
+    strategy:
+      fail-fast: false
+      matrix:
+        backend:
+          - name: cpu
+            cmake_flags: ""
+            artifact_suffix: windows-arm64-cpu
+          - name: vulkan
+            cmake_flags: "-DGGML_VULKAN=ON"
+            artifact_suffix: windows-arm64-vulkan
     runs-on: windows-2022
     steps:
       - uses: actions/checkout@v6
@@ -76,9 +86,16 @@ jobs:
 
       - run: choco install ninja
 
+      - if: ${{ matrix.backend.name == 'vulkan' }}
+        run: |
+          curl.exe -o $env:RUNNER_TEMP\VulkanSDK-Installer.exe -L "https://sdk.lunarg.com/sdk/download/1.4.350.0/warm/vulkansdk-windows-ARM64-1.4.350.0.exe"
+          & "$env:RUNNER_TEMP\VulkanSDK-Installer.exe" --accept-licenses --default-answer --confirm-command install
+          Add-Content $env:GITHUB_ENV "VULKAN_SDK=C:\VulkanSDK\1.4.350.0"
+          Add-Content $env:GITHUB_PATH "C:\VulkanSDK\1.4.350.0\bin"
+
       - uses: ggml-org/ccache-action@v1.2.21
         with:
-          key: windows-arm64-cpu
+          key: windows-${{ matrix.backend.artifact_suffix }}
           variant: ccache
           evict-old-files: 1d
           save: ${{ github.event_name == 'push' && github.ref_name == github.event.repository.default_branch }}
@@ -88,20 +105,31 @@ jobs:
             -G "Ninja Multi-Config" `
             -D CMAKE_TOOLCHAIN_FILE=cmake/arm64-windows-llvm.cmake `
             -DGGML_NATIVE=OFF `
+            ${{ matrix.backend.cmake_flags }} `
             ${{ env.CMAKE_BASE_ARGS }}
 
       - run: cmake --build build --config Release -j ${env:NUMBER_OF_PROCESSORS}
 
       - run: |
           cp LICENSE ./build/bin/Release/
-          7z a turboquant-plus-${{ github.ref_name }}-windows-arm64-cpu.zip .\build\bin\Release\*
+          7z a turboquant-plus-${{ github.ref_name }}-${{ matrix.backend.artifact_suffix }}.zip .\build\bin\Release\*
 
       - uses: actions/upload-artifact@v6
         with:
-          name: windows-arm64-cpu
-          path: turboquant-plus-${{ github.ref_name }}-windows-arm64-cpu.zip
+          name: ${{ matrix.backend.artifact_suffix }}
+          path: turboquant-plus-${{ github.ref_name }}-${{ matrix.backend.artifact_suffix }}.zip
 
   windows-x86:
+    strategy:
+      fail-fast: false
+      matrix:
+        backend:
+          - name: cpu
+            cmake_flags: ""
+            artifact_suffix: windows-x86-cpu
+          - name: vulkan
+            cmake_flags: "-DGGML_VULKAN=ON"
+            artifact_suffix: windows-x86-vulkan
     runs-on: windows-2022
     steps:
       - uses: actions/checkout@v6
@@ -111,6 +139,13 @@ jobs:
           fetch-depth: 0
 
       - run: choco install ninja
+
+      - if: ${{ matrix.backend.name == 'vulkan' }}
+        run: |
+          curl.exe -o $env:RUNNER_TEMP\VulkanSDK-Installer.exe -L "https://sdk.lunarg.com/sdk/download/${env:VULKAN_VERSION}/windows/vulkansdk-windows-X64-${env:VULKAN_VERSION}.exe"
+          & "$env:RUNNER_TEMP\VulkanSDK-Installer.exe" --accept-licenses --default-answer --confirm-command install
+          Add-Content $env:GITHUB_ENV "VULKAN_SDK=C:\VulkanSDK\${env:VULKAN_VERSION}"
+          Add-Content $env:GITHUB_PATH "C:\VulkanSDK\${env:VULKAN_VERSION}\bin"
 
       - run: |
           mkdir -Force cmake
@@ -125,7 +160,7 @@ jobs:
 
       - uses: ggml-org/ccache-action@v1.2.21
         with:
-          key: windows-x86-cpu
+          key: windows-${{ matrix.backend.artifact_suffix }}
           variant: ccache
           evict-old-files: 1d
           save: ${{ github.event_name == 'push' && github.ref_name == github.event.repository.default_branch }}
@@ -135,15 +170,16 @@ jobs:
             -G "Ninja Multi-Config" `
             -D CMAKE_TOOLCHAIN_FILE=cmake/x86-windows-llvm.cmake `
             -DGGML_NATIVE=OFF `
+            ${{ matrix.backend.cmake_flags }} `
             ${{ env.CMAKE_BASE_ARGS }}
 
       - run: cmake --build build --config Release -j ${env:NUMBER_OF_PROCESSORS}
 
       - run: |
           cp LICENSE ./build/bin/Release/
-          7z a turboquant-plus-${{ github.ref_name }}-windows-x86-cpu.zip .\build\bin\Release\*
+          7z a turboquant-plus-${{ github.ref_name }}-${{ matrix.backend.artifact_suffix }}.zip .\build\bin\Release\*
 
       - uses: actions/upload-artifact@v6
         with:
-          name: windows-x86-cpu
-          path: turboquant-plus-${{ github.ref_name }}-windows-x86-cpu.zip
+          name: ${{ matrix.backend.artifact_suffix }}
+          path: turboquant-plus-${{ github.ref_name }}-${{ matrix.backend.artifact_suffix }}.zip
