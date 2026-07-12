@@ -63,13 +63,14 @@ jobs:
 
       - run: |
           cp LICENSE ./build/bin/
-          tar -czvf turboquant-plus-${{ inputs.release_tag || github.ref_name }}-${{ matrix.backend.artifact_suffix }}.tar.gz \
-            --transform "s,^\.,turboquant-plus-${{ inputs.release_tag || github.ref_name }}," -C ./build/bin .
+          tag_name="${{ github.event_name == 'workflow_dispatch' && inputs.release_tag || github.ref_name }}"
+          tar -czvf "turboquant-plus-${tag_name}-${{ matrix.backend.artifact_suffix }}.tar.gz" \
+            --transform "s,^\.,turboquant-plus-${tag_name}," -C ./build/bin .
 
       - uses: actions/upload-artifact@v6
         with:
           name: ${{ matrix.backend.artifact_suffix }}
-          path: turboquant-plus-${{ inputs.release_tag || github.ref_name }}-${{ matrix.backend.artifact_suffix }}.tar.gz
+          path: turboquant-plus-${{ github.event_name == 'workflow_dispatch' && inputs.release_tag || github.ref_name }}-${{ matrix.backend.artifact_suffix }}.tar.gz
 
   linux-arm64:
     strategy:
@@ -112,13 +113,14 @@ jobs:
 
       - run: |
           cp LICENSE ./build/bin/
-          tar -czvf turboquant-plus-${{ inputs.release_tag || github.ref_name }}-${{ matrix.backend.artifact_suffix }}.tar.gz \
-            --transform "s,^\.,turboquant-plus-${{ inputs.release_tag || github.ref_name }}," -C ./build/bin .
+          tag_name="${{ github.event_name == 'workflow_dispatch' && inputs.release_tag || github.ref_name }}"
+          tar -czvf "turboquant-plus-${tag_name}-${{ matrix.backend.artifact_suffix }}.tar.gz" \
+            --transform "s,^\.,turboquant-plus-${tag_name}," -C ./build/bin .
 
       - uses: actions/upload-artifact@v6
         with:
           name: ${{ matrix.backend.artifact_suffix }}
-          path: turboquant-plus-${{ inputs.release_tag || github.ref_name }}-${{ matrix.backend.artifact_suffix }}.tar.gz
+          path: turboquant-plus-${{ github.event_name == 'workflow_dispatch' && inputs.release_tag || github.ref_name }}-${{ matrix.backend.artifact_suffix }}.tar.gz
 
   linux-x86:
     runs-on: ubuntu-22.04
@@ -156,13 +158,14 @@ jobs:
 
       - run: |
           cp LICENSE ./build/bin/
-          tar -czvf turboquant-plus-${{ inputs.release_tag || github.ref_name }}-linux-x86-cpu.tar.gz \
-            --transform "s,^\.,turboquant-plus-${{ inputs.release_tag || github.ref_name }}," -C ./build/bin .
+          tag_name="${{ github.event_name == 'workflow_dispatch' && inputs.release_tag || github.ref_name }}"
+          tar -czvf "turboquant-plus-${tag_name}-linux-x86-cpu.tar.gz" \
+            --transform "s,^\.,turboquant-plus-${tag_name}," -C ./build/bin .
 
       - uses: actions/upload-artifact@v6
         with:
           name: linux-x86-cpu
-          path: turboquant-plus-${{ inputs.release_tag || github.ref_name }}-linux-x86-cpu.tar.gz
+          path: turboquant-plus-${{ github.event_name == 'workflow_dispatch' && inputs.release_tag || github.ref_name }}-linux-x86-cpu.tar.gz
 
   linux-arm32:
     runs-on: ubuntu-22.04
@@ -201,13 +204,14 @@ jobs:
 
       - run: |
           cp LICENSE ./build/bin/
-          tar -czvf turboquant-plus-${{ inputs.release_tag || github.ref_name }}-linux-arm32-cpu.tar.gz \
-            --transform "s,^\.,turboquant-plus-${{ inputs.release_tag || github.ref_name }}," -C ./build/bin .
+          tag_name="${{ github.event_name == 'workflow_dispatch' && inputs.release_tag || github.ref_name }}"
+          tar -czvf "turboquant-plus-${tag_name}-linux-arm32-cpu.tar.gz" \
+            --transform "s,^\.,turboquant-plus-${tag_name}," -C ./build/bin .
 
       - uses: actions/upload-artifact@v6
         with:
           name: linux-arm32-cpu
-          path: turboquant-plus-${{ inputs.release_tag || github.ref_name }}-linux-arm32-cpu.tar.gz
+          path: turboquant-plus-${{ github.event_name == 'workflow_dispatch' && inputs.release_tag || github.ref_name }}-linux-arm32-cpu.tar.gz
 
   windows-x86_64:
     strategy:
@@ -243,12 +247,13 @@ jobs:
 
       - run: |
           cp LICENSE ./build/bin/Release/
-          7z a turboquant-plus-${{ inputs.release_tag || github.ref_name }}-${{ matrix.backend.artifact_suffix }}.zip .\build\bin\Release\*
+          $tag = "${{ github.event_name == 'workflow_dispatch' && inputs.release_tag || github.ref_name }}"
+          7z a "turboquant-plus-${tag}-${{ matrix.backend.artifact_suffix }}.zip" .\build\bin\Release\*
 
       - uses: actions/upload-artifact@v6
         with:
           name: ${{ matrix.backend.artifact_suffix }}
-          path: turboquant-plus-${{ inputs.release_tag || github.ref_name }}-${{ matrix.backend.artifact_suffix }}.zip
+          path: turboquant-plus-${{ github.event_name == 'workflow_dispatch' && inputs.release_tag || github.ref_name }}-${{ matrix.backend.artifact_suffix }}.zip
 
   windows-x86:
     runs-on: windows-2022
@@ -289,12 +294,13 @@ jobs:
 
       - run: |
           cp LICENSE ./build/bin/Release/
-          7z a turboquant-plus-${{ inputs.release_tag || github.ref_name }}-windows-x86-cpu.zip .\build\bin\Release\*
+          $tag = "${{ github.event_name == 'workflow_dispatch' && inputs.release_tag || github.ref_name }}"
+          7z a "turboquant-plus-${tag}-windows-x86-cpu.zip" .\build\bin\Release\*
 
       - uses: actions/upload-artifact@v6
         with:
           name: windows-x86-cpu
-          path: turboquant-plus-${{ inputs.release_tag || github.ref_name }}-windows-x86-cpu.zip
+          path: turboquant-plus-${{ github.event_name == 'workflow_dispatch' && inputs.release_tag || github.ref_name }}-windows-x86-cpu.zip
 
   windows-arm64:
     strategy:
@@ -350,102 +356,13 @@ jobs:
 
       - run: |
           cp LICENSE ./build/bin/Release/
-          7z a turboquant-plus-${{ inputs.release_tag || github.ref_name }}-${{ matrix.backend.artifact_suffix }}.zip .\build\bin\Release\*
+          $tag = "${{ github.event_name == 'workflow_dispatch' && inputs.release_tag || github.ref_name }}"
+          7z a "turboquant-plus-${tag}-${{ matrix.backend.artifact_suffix }}.zip" .\build\bin\Release\*
 
       - uses: actions/upload-artifact@v6
         with:
           name: ${{ matrix.backend.artifact_suffix }}
-          path: turboquant-plus-${{ inputs.release_tag || github.ref_name }}-${{ matrix.backend.artifact_suffix }}.zip
-
-  windows-cuda:
-    strategy:
-      fail-fast: false
-      matrix:
-        cuda: ['12.4']
-    runs-on: windows-2022
-    steps:
-      - uses: actions/checkout@v6
-        with:
-          repository: TheTom/llama-cpp-turboquant
-          ref: ${{ inputs.source_ref || 'feature/turboquant-kv-cache' }}
-          fetch-depth: 0
-
-      - uses: ./.github/actions/windows-setup-cuda
-        with:
-          cuda_version: ${{ matrix.cuda }}
-
-      - run: choco install ninja
-
-      - shell: cmd
-        run: |
-          call "C:\Program Files\Microsoft Visual Studio\2022\Enterprise\VC\Auxiliary\Build\vcvarsall.bat" x64
-          cmake -S . -B build -G "Ninja Multi-Config" ^
-            -DGGML_NATIVE=OFF ^
-            -DGGML_CUDA=ON ^
-            -DGGML_CUDA_FA_ALL_QUANTS=ON ^
-            ${{ env.CMAKE_BASE_ARGS }}
-          set /A NINJA_JOBS=%NUMBER_OF_PROCESSORS%-1
-          cmake --build build --config Release -j %NINJA_JOBS%
-
-      - run: |
-          cp LICENSE ./build/bin/Release/
-          $dst='.\build\bin\Release\'
-          robocopy "${{env.CUDA_PATH}}\bin" $dst cudart64_*.dll cublas64_*.dll cublasLt64_*.dll
-          robocopy "${{env.CUDA_PATH}}\lib" $dst cudart64_*.dll cublas64_*.dll cublasLt64_*.dll
-          robocopy "${{env.CUDA_PATH}}\bin\x64" $dst cudart64_*.dll cublas64_*.dll cublasLt64_*.dll
-          7z a turboquant-plus-${{ inputs.release_tag || github.ref_name }}-windows-x64-cuda${{ matrix.cuda }}.zip .\build\bin\Release\*
-
-      - uses: actions/upload-artifact@v6
-        with:
-          name: windows-x64-cuda${{ matrix.cuda }}
-          path: turboquant-plus-${{ inputs.release_tag || github.ref_name }}-windows-x64-cuda${{ matrix.cuda }}.zip
-
-  linux-cuda:
-    strategy:
-      fail-fast: false
-      matrix:
-        cuda: ['12.4']
-    runs-on: ubuntu-22.04
-    steps:
-      - uses: actions/checkout@v6
-        with:
-          repository: TheTom/llama-cpp-turboquant
-          ref: ${{ inputs.source_ref || 'feature/turboquant-kv-cache' }}
-          fetch-depth: 0
-
-      - run: |
-          sudo apt-get update
-          sudo apt-get install -y build-essential libssl-dev
-
-      - run: |
-          wget -q https://developer.download.nvidia.com/compute/cuda/repos/ubuntu2204/x86_64/cuda-keyring_1.1-1_all.deb
-          sudo dpkg -i cuda-keyring_1.1-1_all.deb
-          sudo apt-get update
-          sudo apt-get install -y cuda-toolkit-12-4
-          echo "CUDA_PATH=/usr/local/cuda-${{ matrix.cuda }}" >> "$GITHUB_ENV"
-          echo "/usr/local/cuda-${{ matrix.cuda }}/bin" >> "$GITHUB_PATH"
-
-      - run: |
-          cmake -B build \
-            -DCMAKE_BUILD_TYPE=Release \
-            -DCMAKE_INSTALL_RPATH='$ORIGIN' \
-            -DCMAKE_BUILD_WITH_INSTALL_RPATH=ON \
-            -DGGML_CUDA=ON \
-            -DGGML_CUDA_FA_ALL_QUANTS=ON \
-            -DGGML_NATIVE=OFF \
-            ${{ env.CMAKE_BASE_ARGS }}
-
-      - run: cmake --build build --config Release -j $(nproc)
-
-      - run: |
-          cp LICENSE ./build/bin/
-          tar -czvf turboquant-plus-${{ inputs.release_tag || github.ref_name }}-linux-x64-cuda${{ matrix.cuda }}.tar.gz \
-            --transform "s,^\.,turboquant-plus-${{ inputs.release_tag || github.ref_name }}," -C ./build/bin .
-
-      - uses: actions/upload-artifact@v6
-        with:
-          name: linux-x64-cuda${{ matrix.cuda }}
-          path: turboquant-plus-${{ inputs.release_tag || github.ref_name }}-linux-x64-cuda${{ matrix.cuda }}.tar.gz
+          path: turboquant-plus-${{ github.event_name == 'workflow_dispatch' && inputs.release_tag || github.ref_name }}-${{ matrix.backend.artifact_suffix }}.zip
 
   release:
     needs:
@@ -456,8 +373,6 @@ jobs:
       - windows-x86_64
       - windows-x86
       - windows-arm64
-      - windows-cuda
-      - linux-cuda
     runs-on: ubuntu-latest
     permissions:
       contents: write
