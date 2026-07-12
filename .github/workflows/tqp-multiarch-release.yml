@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       source_ref:
-        description: 'Git ref to build'
+        description: 'Git ref (branch/commit) of llama-cpp-turboquant to build'
         required: true
         default: 'feature/turboquant-kv-cache'
       release_tag:
@@ -35,7 +35,8 @@ jobs:
     steps:
       - uses: actions/checkout@v6
         with:
-          ref: ${{ inputs.source_ref || github.ref_name }}
+          repository: TheTom/llama-cpp-turboquant
+          ref: ${{ inputs.source_ref || 'feature/turboquant-kv-cache' }}
           fetch-depth: 0
 
       - if: ${{ matrix.backend.name == 'cpu' }}
@@ -85,7 +86,8 @@ jobs:
     steps:
       - uses: actions/checkout@v6
         with:
-          ref: ${{ inputs.source_ref || github.ref_name }}
+          repository: TheTom/llama-cpp-turboquant
+          ref: ${{ inputs.source_ref || 'feature/turboquant-kv-cache' }}
           fetch-depth: 0
 
       - run: |
@@ -123,7 +125,8 @@ jobs:
     steps:
       - uses: actions/checkout@v6
         with:
-          ref: ${{ inputs.source_ref || github.ref_name }}
+          repository: TheTom/llama-cpp-turboquant
+          ref: ${{ inputs.source_ref || 'feature/turboquant-kv-cache' }}
           fetch-depth: 0
 
       - run: |
@@ -160,7 +163,8 @@ jobs:
     steps:
       - uses: actions/checkout@v6
         with:
-          ref: ${{ inputs.source_ref || github.ref_name }}
+          repository: TheTom/llama-cpp-turboquant
+          ref: ${{ inputs.source_ref || 'feature/turboquant-kv-cache' }}
           fetch-depth: 0
 
       - run: |
@@ -214,7 +218,8 @@ jobs:
     steps:
       - uses: actions/checkout@v6
         with:
-          ref: ${{ inputs.source_ref || github.ref_name }}
+          repository: TheTom/llama-cpp-turboquant
+          ref: ${{ inputs.source_ref || 'feature/turboquant-kv-cache' }}
           fetch-depth: 0
 
       - run: choco install ninja
@@ -244,10 +249,22 @@ jobs:
     steps:
       - uses: actions/checkout@v6
         with:
-          ref: ${{ inputs.source_ref || github.ref_name }}
+          repository: TheTom/llama-cpp-turboquant
+          ref: ${{ inputs.source_ref || 'feature/turboquant-kv-cache' }}
           fetch-depth: 0
 
       - run: choco install ninja
+
+      - run: |
+          mkdir -Force cmake
+          @'
+          set( CMAKE_SYSTEM_NAME Windows )
+          set( CMAKE_SYSTEM_PROCESSOR x86 )
+          set( CMAKE_C_COMPILER clang )
+          set( CMAKE_CXX_COMPILER clang++ )
+          set( CMAKE_C_COMPILER_TARGET i686-pc-windows-msvc )
+          set( CMAKE_CXX_COMPILER_TARGET i686-pc-windows-msvc )
+          '@ | Out-File -Encoding ASCII cmake/x86-windows-llvm.cmake
 
       - run: |
           cmake -S . -B build `
@@ -272,7 +289,8 @@ jobs:
     steps:
       - uses: actions/checkout@v6
         with:
-          ref: ${{ inputs.source_ref || github.ref_name }}
+          repository: TheTom/llama-cpp-turboquant
+          ref: ${{ inputs.source_ref || 'feature/turboquant-kv-cache' }}
           fetch-depth: 0
 
       - run: choco install ninja
@@ -304,7 +322,8 @@ jobs:
     steps:
       - uses: actions/checkout@v6
         with:
-          ref: ${{ inputs.source_ref || github.ref_name }}
+          repository: TheTom/llama-cpp-turboquant
+          ref: ${{ inputs.source_ref || 'feature/turboquant-kv-cache' }}
           fetch-depth: 0
 
       - uses: ./.github/actions/windows-setup-cuda
@@ -346,7 +365,8 @@ jobs:
     steps:
       - uses: actions/checkout@v6
         with:
-          ref: ${{ inputs.source_ref || github.ref_name }}
+          repository: TheTom/llama-cpp-turboquant
+          ref: ${{ inputs.source_ref || 'feature/turboquant-kv-cache' }}
           fetch-depth: 0
 
       - run: |

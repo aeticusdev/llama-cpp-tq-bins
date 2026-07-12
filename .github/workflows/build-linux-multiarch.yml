@@ -3,25 +3,8 @@ name: Linux Multi-Arch Build
 on:
   workflow_dispatch:
   push:
-    branches:
-      - master
-      - 'feature/**'
-    paths:
-      - '.github/workflows/build-linux-multiarch.yml'
-      - '**/CMakeLists.txt'
-      - '**/.cmake'
-      - '**/*.h'
-      - '**/*.hpp'
-      - '**/*.c'
-      - '**/*.cpp'
-      - '**/*.comp'
-      - '**/*.glsl'
   pull_request:
     types: [opened, synchronize, reopened]
-    paths:
-      - '**/CMakeLists.txt'
-      - 'ggml/src/ggml-vulkan/**'
-      - 'ggml/src/ggml-cpu/**'
   schedule:
     - cron: '0 6 * * 0'
 
@@ -48,28 +31,26 @@ jobs:
     steps:
       - uses: actions/checkout@v6
         with:
+          repository: TheTom/llama-cpp-turboquant
+          ref: feature/turboquant-kv-cache
           fetch-depth: 0
 
-      - name: Deps (cpu)
-        if: ${{ matrix.backend.name == 'cpu' }}
+      - if: ${{ matrix.backend.name == 'cpu' }}
         run: |
           sudo apt-get update
           sudo apt-get install -y build-essential libssl-dev
 
-      - name: Deps (vulkan)
-        if: ${{ matrix.backend.name == 'vulkan' }}
+      - if: ${{ matrix.backend.name == 'vulkan' }}
         run: |
-          wget -qO - https://packages.lunarg.com/lunarg-signing-key-pub.asc | sudo apt-key add -
-          sudo wget -qO /etc/apt/sources.list.d/lunarg-vulkan-jammy.list https://packages.lunarg.com/vulkan/lunarg-vulkan-jammy.list
-          sudo apt-get update -y
-          sudo apt-get install -y build-essential mesa-vulkan-drivers vulkan-sdk libssl-dev
+          sudo apt-get update
+          sudo apt-get install -y build-essential libssl-dev mesa-vulkan-drivers vulkan-sdk glslc
 
       - uses: ggml-org/ccache-action@v1.2.21
         with:
           key: linux-${{ matrix.backend.artifact_suffix }}
           variant: ccache
           evict-old-files: 1d
-          save: ${{ github.event_name == 'push' && github.ref == 'refs/heads/master' }}
+          save: ${{ github.event_name == 'push' && github.ref_name == github.event.repository.default_branch }}
 
       - run: |
           cmake -B build \
@@ -106,6 +87,8 @@ jobs:
     steps:
       - uses: actions/checkout@v6
         with:
+          repository: TheTom/llama-cpp-turboquant
+          ref: feature/turboquant-kv-cache
           fetch-depth: 0
 
       - run: |
@@ -115,14 +98,14 @@ jobs:
           echo "CXX=g++-14" >> "$GITHUB_ENV"
 
       - if: ${{ matrix.backend.name == 'vulkan' }}
-        run: sudo apt-get install -y glslc libvulkan-dev spirv-headers
+        run: sudo apt-get install -y libvulkan-dev spirv-headers spirv-tools
 
       - uses: ggml-org/ccache-action@v1.2.21
         with:
           key: linux-${{ matrix.backend.artifact_suffix }}
           variant: ccache
           evict-old-files: 1d
-          save: ${{ github.event_name == 'push' && github.ref == 'refs/heads/master' }}
+          save: ${{ github.event_name == 'push' && github.ref_name == github.event.repository.default_branch }}
 
       - run: |
           cmake -B build \
@@ -150,6 +133,8 @@ jobs:
     steps:
       - uses: actions/checkout@v6
         with:
+          repository: TheTom/llama-cpp-turboquant
+          ref: feature/turboquant-kv-cache
           fetch-depth: 0
 
       - run: |
@@ -185,6 +170,8 @@ jobs:
     steps:
       - uses: actions/checkout@v6
         with:
+          repository: TheTom/llama-cpp-turboquant
+          ref: feature/turboquant-kv-cache
           fetch-depth: 0
 
       - run: |
