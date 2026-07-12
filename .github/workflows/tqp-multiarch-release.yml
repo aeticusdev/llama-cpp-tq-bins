@@ -294,6 +294,12 @@ jobs:
             -G "Ninja Multi-Config" `
             -D CMAKE_TOOLCHAIN_FILE=cmake/x86-windows-llvm.cmake `
             -DGGML_NATIVE=OFF `
+            -DGGML_BMI2=OFF `
+            -DGGML_AVX2=OFF `
+            -DGGML_AVX=OFF `
+            -DGGML_SSE42=OFF `
+            -DGGML_FMA=OFF `
+            -DGGML_F16C=OFF `
             ${{ matrix.backend.cmake_flags }} `
             ${{ env.CMAKE_BASE_ARGS }}
 
@@ -340,6 +346,7 @@ jobs:
           cmake -S . -B build `
             -G "Ninja Multi-Config" `
             -DGGML_NATIVE=OFF `
+            -DLLAMA_BUILD_UI=OFF `
             ${{ matrix.backend.cmake_flags }} `
             ${{ env.CMAKE_BASE_ARGS }}
 
