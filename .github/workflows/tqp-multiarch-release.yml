@@ -165,16 +165,6 @@ jobs:
           path: turboquant-plus-${{ inputs.release_tag || github.ref_name }}-linux-x86-cpu.tar.gz
 
   linux-arm32:
-    strategy:
-      fail-fast: false
-      matrix:
-        backend:
-          - name: cpu
-            cmake_flags: "-DGGML_OPENMP=OFF"
-            artifact_suffix: linux-arm32-cpu
-          - name: vulkan
-            cmake_flags: "-DGGML_VULKAN=ON -DGGML_OPENMP=OFF"
-            artifact_suffix: linux-arm32-vulkan
     runs-on: ubuntu-22.04
     steps:
       - uses: actions/checkout@v6
@@ -191,12 +181,7 @@ jobs:
           deb [arch=armhf] http://ports.ubuntu.com/ubuntu-ports/ jammy-security main universe
           EOF
           sudo apt-get update || true
-
-      - run: |
-          sudo apt-get install -y build-essential gcc-arm-linux-gnueabihf g++-arm-linux-gnueabihf libssl-dev:armhf
-
-      - if: ${{ matrix.backend.name == 'vulkan' }}
-        run: sudo apt-get install -y glslang-tools libvulkan-dev:armhf spirv-headers
+          sudo apt-get install -y build-essential gcc-arm-linux-gnueabihf g++-arm-linux-gnueabihf
 
       - run: |
           cmake -B build \
@@ -207,25 +192,22 @@ jobs:
             -DCMAKE_CXX_COMPILER=arm-linux-gnueabihf-g++ \
             -DCMAKE_INSTALL_RPATH='$ORIGIN' \
             -DCMAKE_BUILD_WITH_INSTALL_RPATH=ON \
-            -DCMAKE_FIND_ROOT_PATH=/usr/lib/arm-linux-gnueabihf \
-            -DCMAKE_FIND_ROOT_PATH_MODE_PROGRAM=NEVER \
-            -DCMAKE_FIND_ROOT_PATH_MODE_LIBRARY=ONLY \
-            -DCMAKE_FIND_ROOT_PATH_MODE_INCLUDE=BOTH \
+            -DGGML_NATIVE=OFF \
+            -DGGML_OPENMP=OFF \
             -DLLAMA_OPENSSL=OFF \
-            ${{ matrix.backend.cmake_flags }} \
             ${{ env.CMAKE_BASE_ARGS }}
 
       - run: cmake --build build --config Release -j $(nproc)
 
       - run: |
           cp LICENSE ./build/bin/
-          tar -czvf turboquant-plus-${{ inputs.release_tag || github.ref_name }}-${{ matrix.backend.artifact_suffix }}.tar.gz \
+          tar -czvf turboquant-plus-${{ inputs.release_tag || github.ref_name }}-linux-arm32-cpu.tar.gz \
             --transform "s,^\.,turboquant-plus-${{ inputs.release_tag || github.ref_name }}," -C ./build/bin .
 
       - uses: actions/upload-artifact@v6
         with:
-          name: ${{ matrix.backend.artifact_suffix }}
-          path: turboquant-plus-${{ inputs.release_tag || github.ref_name }}-${{ matrix.backend.artifact_suffix }}.tar.gz
+          name: linux-arm32-cpu
+          path: turboquant-plus-${{ inputs.release_tag || github.ref_name }}-linux-arm32-cpu.tar.gz
 
   windows-x86_64:
     strategy:
@@ -337,7 +319,7 @@ jobs:
           - name: vulkan
             cmake_flags: "-DGGML_VULKAN=ON"
             artifact_suffix: windows-arm64-vulkan
-    runs-on: windows-2022
+    runs-on: windows-11-arm
     steps:
       - uses: actions/checkout@v6
         with:
@@ -357,7 +339,6 @@ jobs:
       - run: |
           cmake -S . -B build `
             -G "Ninja Multi-Config" `
-            -D CMAKE_TOOLCHAIN_FILE=cmake/arm64-windows-llvm.cmake `
             -DGGML_NATIVE=OFF `
             ${{ matrix.backend.cmake_flags }} `
             ${{ env.CMAKE_BASE_ARGS }}

@@ -76,7 +76,7 @@ jobs:
           - name: vulkan
             cmake_flags: "-DGGML_VULKAN=ON"
             artifact_suffix: windows-arm64-vulkan
-    runs-on: windows-2022
+    runs-on: windows-11-arm
     steps:
       - uses: actions/checkout@v6
         with:
@@ -103,7 +103,6 @@ jobs:
       - run: |
           cmake -S . -B build `
             -G "Ninja Multi-Config" `
-            -D CMAKE_TOOLCHAIN_FILE=cmake/arm64-windows-llvm.cmake `
             -DGGML_NATIVE=OFF `
             ${{ matrix.backend.cmake_flags }} `
             ${{ env.CMAKE_BASE_ARGS }}
