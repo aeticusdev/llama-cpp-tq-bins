@@ -116,7 +116,9 @@ jobs:
       - run: |
           cmake -S . -B build `
             -G "Ninja Multi-Config" `
+            -D CMAKE_TOOLCHAIN_FILE=cmake/arm64-windows-llvm.cmake `
             -DGGML_NATIVE=OFF `
+            -DGGML_CPU_REPACK=OFF `
             ${{ matrix.backend.cmake_flags }} `
             ${{ env.CMAKE_BASE_ARGS }}
 
