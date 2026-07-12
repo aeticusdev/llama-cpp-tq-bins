@@ -325,15 +325,16 @@ jobs:
           Add-Content $env:GITHUB_PATH "C:\VulkanSDK\1.4.350.0\bin"
 
       - run: |
+          mkdir -Force tools\ui\dist
+          Set-Content -Path tools\ui\dist\index.html -Value '<!DOCTYPE html><html><head><title>llama.cpp</title></head><body>llama.cpp server</body></html>'
+          Set-Content -Path tools\ui\dist\loading.html -Value '<!DOCTYPE html><html><head><title>Loading...</title></head><body>Loading...</body></html>'
+
+      - run: |
           cmake -S . -B build `
             -G "Ninja Multi-Config" `
             -DGGML_NATIVE=OFF `
             ${{ matrix.backend.cmake_flags }} `
             ${{ env.CMAKE_BASE_ARGS }}
-
-      - run: |
-          mkdir -Force build\tools\ui\dist
-          Set-Content -Path build\tools\ui\dist\loading.html -Value '<!DOCTYPE html><html><head><title>Loading...</title></head><body>Loading...</body></html>'
 
       - run: cmake --build build --config Release -j ${env:NUMBER_OF_PROCESSORS}
 
