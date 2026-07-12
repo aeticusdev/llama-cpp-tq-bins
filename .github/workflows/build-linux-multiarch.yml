@@ -1,0 +1,223 @@
+name: Linux Multi-Arch Build
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - master
+      - 'feature/**'
+    paths:
+      - '.github/workflows/build-linux-multiarch.yml'
+      - '**/CMakeLists.txt'
+      - '**/.cmake'
+      - '**/*.h'
+      - '**/*.hpp'
+      - '**/*.c'
+      - '**/*.cpp'
+      - '**/*.comp'
+      - '**/*.glsl'
+  pull_request:
+    types: [opened, synchronize, reopened]
+    paths:
+      - '**/CMakeLists.txt'
+      - 'ggml/src/ggml-vulkan/**'
+      - 'ggml/src/ggml-cpu/**'
+  schedule:
+    - cron: '0 6 * * 0'
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.head_ref && github.ref || github.run_id }}
+  cancel-in-progress: true
+
+env:
+  CMAKE_BASE_ARGS: "-DLLAMA_BUILD_EXAMPLES=OFF -DLLAMA_BUILD_TESTS=OFF -DLLAMA_BUILD_TOOLS=ON -DLLAMA_BUILD_SERVER=ON -DGGML_NATIVE=OFF"
+
+jobs:
+  linux-x86_64:
+    strategy:
+      fail-fast: false
+      matrix:
+        backend:
+          - name: cpu
+            cmake_flags: "-DGGML_BACKEND_DL=ON -DGGML_CPU_ALL_VARIANTS=ON"
+            artifact_suffix: linux-x64-cpu
+          - name: vulkan
+            cmake_flags: "-DGGML_BACKEND_DL=ON -DGGML_CPU_ALL_VARIANTS=ON -DGGML_VULKAN=ON"
+            artifact_suffix: linux-x64-vulkan
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Deps (cpu)
+        if: ${{ matrix.backend.name == 'cpu' }}
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential libssl-dev
+
+      - name: Deps (vulkan)
+        if: ${{ matrix.backend.name == 'vulkan' }}
+        run: |
+          wget -qO - https://packages.lunarg.com/lunarg-signing-key-pub.asc | sudo apt-key add -
+          sudo wget -qO /etc/apt/sources.list.d/lunarg-vulkan-jammy.list https://packages.lunarg.com/vulkan/lunarg-vulkan-jammy.list
+          sudo apt-get update -y
+          sudo apt-get install -y build-essential mesa-vulkan-drivers vulkan-sdk libssl-dev
+
+      - uses: ggml-org/ccache-action@v1.2.21
+        with:
+          key: linux-${{ matrix.backend.artifact_suffix }}
+          variant: ccache
+          evict-old-files: 1d
+          save: ${{ github.event_name == 'push' && github.ref == 'refs/heads/master' }}
+
+      - run: |
+          cmake -B build \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_INSTALL_RPATH='$ORIGIN' \
+            -DCMAKE_BUILD_WITH_INSTALL_RPATH=ON \
+            ${{ matrix.backend.cmake_flags }} \
+            ${{ env.CMAKE_BASE_ARGS }}
+
+      - run: cmake --build build --config Release -j $(nproc)
+
+      - run: |
+          cp LICENSE ./build/bin/
+          tar -czvf turboquant-plus-${{ github.ref_name }}-${{ matrix.backend.artifact_suffix }}.tar.gz \
+            --transform "s,^\.,turboquant-plus-${{ github.ref_name }}," -C ./build/bin .
+
+      - uses: actions/upload-artifact@v6
+        with:
+          name: ${{ matrix.backend.artifact_suffix }}
+          path: turboquant-plus-${{ github.ref_name }}-${{ matrix.backend.artifact_suffix }}.tar.gz
+
+  linux-arm64:
+    strategy:
+      fail-fast: false
+      matrix:
+        backend:
+          - name: cpu
+            cmake_flags: ""
+            artifact_suffix: linux-arm64-cpu
+          - name: vulkan
+            cmake_flags: "-DGGML_VULKAN=ON"
+            artifact_suffix: linux-arm64-vulkan
+    runs-on: ubuntu-24.04-arm
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - run: |
+          sudo apt-get update
+          sudo apt-get install -y gcc-14 g++-14 build-essential libssl-dev ninja-build
+          echo "CC=gcc-14" >> "$GITHUB_ENV"
+          echo "CXX=g++-14" >> "$GITHUB_ENV"
+
+      - if: ${{ matrix.backend.name == 'vulkan' }}
+        run: sudo apt-get install -y glslc libvulkan-dev spirv-headers
+
+      - uses: ggml-org/ccache-action@v1.2.21
+        with:
+          key: linux-${{ matrix.backend.artifact_suffix }}
+          variant: ccache
+          evict-old-files: 1d
+          save: ${{ github.event_name == 'push' && github.ref == 'refs/heads/master' }}
+
+      - run: |
+          cmake -B build \
+            -G "Ninja" \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_INSTALL_RPATH='$ORIGIN' \
+            -DCMAKE_BUILD_WITH_INSTALL_RPATH=ON \
+            ${{ matrix.backend.cmake_flags }} \
+            ${{ env.CMAKE_BASE_ARGS }}
+
+      - run: cmake --build build -j $(nproc)
+
+      - run: |
+          cp LICENSE ./build/bin/
+          tar -czvf turboquant-plus-${{ github.ref_name }}-${{ matrix.backend.artifact_suffix }}.tar.gz \
+            --transform "s,^\.,turboquant-plus-${{ github.ref_name }}," -C ./build/bin .
+
+      - uses: actions/upload-artifact@v6
+        with:
+          name: ${{ matrix.backend.artifact_suffix }}
+          path: turboquant-plus-${{ github.ref_name }}-${{ matrix.backend.artifact_suffix }}.tar.gz
+
+  linux-x86:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - run: |
+          sudo dpkg --add-architecture i386
+          sudo apt-get update
+          sudo apt-get install -y build-essential gcc-multilib g++-multilib
+
+      - run: |
+          cmake -B build \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_C_FLAGS="-m32" \
+            -DCMAKE_CXX_FLAGS="-m32" \
+            -DCMAKE_INSTALL_RPATH='$ORIGIN' \
+            -DCMAKE_BUILD_WITH_INSTALL_RPATH=ON \
+            -DGGML_OPENMP=OFF \
+            -DLLAMA_OPENSSL=OFF \
+            ${{ env.CMAKE_BASE_ARGS }}
+
+      - run: cmake --build build --config Release -j $(nproc)
+
+      - run: |
+          cp LICENSE ./build/bin/
+          tar -czvf turboquant-plus-${{ github.ref_name }}-linux-x86-cpu.tar.gz \
+            --transform "s,^\.,turboquant-plus-${{ github.ref_name }}," -C ./build/bin .
+
+      - uses: actions/upload-artifact@v6
+        with:
+          name: linux-x86-cpu
+          path: turboquant-plus-${{ github.ref_name }}-linux-x86-cpu.tar.gz
+
+  linux-arm32:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - run: |
+          sudo dpkg --add-architecture armhf
+          cat << EOF | sudo tee /etc/apt/sources.list.d/armhf-ports.list
+          deb [arch=armhf] http://ports.ubuntu.com/ubuntu-ports/ jammy main universe
+          deb [arch=armhf] http://ports.ubuntu.com/ubuntu-ports/ jammy-updates main universe
+          deb [arch=armhf] http://ports.ubuntu.com/ubuntu-ports/ jammy-security main universe
+          EOF
+          sudo apt-get update || true
+          sudo apt-get install -y build-essential gcc-arm-linux-gnueabihf g++-arm-linux-gnueabihf
+
+      - run: |
+          cmake -B build \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_SYSTEM_NAME=Linux \
+            -DCMAKE_SYSTEM_PROCESSOR=arm \
+            -DCMAKE_C_COMPILER=arm-linux-gnueabihf-gcc \
+            -DCMAKE_CXX_COMPILER=arm-linux-gnueabihf-g++ \
+            -DCMAKE_INSTALL_RPATH='$ORIGIN' \
+            -DCMAKE_BUILD_WITH_INSTALL_RPATH=ON \
+            -DGGML_OPENMP=OFF \
+            -DLLAMA_OPENSSL=OFF \
+            ${{ env.CMAKE_BASE_ARGS }}
+
+      - run: cmake --build build --config Release -j $(nproc)
+
+      - run: |
+          cp LICENSE ./build/bin/
+          tar -czvf turboquant-plus-${{ github.ref_name }}-linux-arm32-cpu.tar.gz \
+            --transform "s,^\.,turboquant-plus-${{ github.ref_name }}," -C ./build/bin .
+
+      - uses: actions/upload-artifact@v6
+        with:
+          name: linux-arm32-cpu
+          path: turboquant-plus-${{ github.ref_name }}-linux-arm32-cpu.tar.gz

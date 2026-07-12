@@ -1,0 +1,419 @@
+name: TurboQuant+ Multi-Arch Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      source_ref:
+        description: 'Git ref to build'
+        required: true
+        default: 'feature/turboquant-kv-cache'
+      release_tag:
+        description: 'Existing release tag to upload assets to'
+        required: true
+        default: 'tqp-v0.4.0'
+  push:
+    tags:
+      - 'tqp-v*'
+
+env:
+  CMAKE_BASE_ARGS: "-DLLAMA_BUILD_EXAMPLES=OFF -DLLAMA_BUILD_TESTS=OFF -DLLAMA_BUILD_TOOLS=ON -DLLAMA_BUILD_SERVER=ON"
+  VULKAN_VERSION: 1.4.313.2
+
+jobs:
+  linux-x86_64:
+    strategy:
+      fail-fast: false
+      matrix:
+        backend:
+          - name: cpu
+            cmake_flags: "-DGGML_BACKEND_DL=ON -DGGML_CPU_ALL_VARIANTS=ON -DGGML_NATIVE=OFF"
+            artifact_suffix: linux-x64-cpu
+          - name: vulkan
+            cmake_flags: "-DGGML_BACKEND_DL=ON -DGGML_CPU_ALL_VARIANTS=ON -DGGML_VULKAN=ON -DGGML_NATIVE=OFF"
+            artifact_suffix: linux-x64-vulkan
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ inputs.source_ref || github.ref_name }}
+          fetch-depth: 0
+
+      - if: ${{ matrix.backend.name == 'cpu' }}
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential libssl-dev
+
+      - if: ${{ matrix.backend.name == 'vulkan' }}
+        run: |
+          wget -qO - https://packages.lunarg.com/lunarg-signing-key-pub.asc | sudo apt-key add -
+          sudo wget -qO /etc/apt/sources.list.d/lunarg-vulkan-jammy.list https://packages.lunarg.com/vulkan/lunarg-vulkan-jammy.list
+          sudo apt-get update -y
+          sudo apt-get install -y build-essential mesa-vulkan-drivers vulkan-sdk libssl-dev
+
+      - run: |
+          cmake -B build \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_INSTALL_RPATH='$ORIGIN' \
+            -DCMAKE_BUILD_WITH_INSTALL_RPATH=ON \
+            ${{ matrix.backend.cmake_flags }} \
+            ${{ env.CMAKE_BASE_ARGS }}
+
+      - run: cmake --build build --config Release -j $(nproc)
+
+      - run: |
+          cp LICENSE ./build/bin/
+          tar -czvf turboquant-plus-${{ inputs.release_tag || github.ref_name }}-${{ matrix.backend.artifact_suffix }}.tar.gz \
+            --transform "s,^\.,turboquant-plus-${{ inputs.release_tag || github.ref_name }}," -C ./build/bin .
+
+      - uses: actions/upload-artifact@v6
+        with:
+          name: ${{ matrix.backend.artifact_suffix }}
+          path: turboquant-plus-${{ inputs.release_tag || github.ref_name }}-${{ matrix.backend.artifact_suffix }}.tar.gz
+
+  linux-arm64:
+    strategy:
+      fail-fast: false
+      matrix:
+        backend:
+          - name: cpu
+            cmake_flags: "-DGGML_NATIVE=OFF"
+            artifact_suffix: linux-arm64-cpu
+          - name: vulkan
+            cmake_flags: "-DGGML_VULKAN=ON -DGGML_NATIVE=OFF"
+            artifact_suffix: linux-arm64-vulkan
+    runs-on: ubuntu-24.04-arm
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ inputs.source_ref || github.ref_name }}
+          fetch-depth: 0
+
+      - run: |
+          sudo apt-get update
+          sudo apt-get install -y gcc-14 g++-14 build-essential libssl-dev ninja-build
+          echo "CC=gcc-14" >> "$GITHUB_ENV"
+          echo "CXX=g++-14" >> "$GITHUB_ENV"
+
+      - if: ${{ matrix.backend.name == 'vulkan' }}
+        run: sudo apt-get install -y glslc libvulkan-dev spirv-headers
+
+      - run: |
+          cmake -B build \
+            -G "Ninja" \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_INSTALL_RPATH='$ORIGIN' \
+            -DCMAKE_BUILD_WITH_INSTALL_RPATH=ON \
+            ${{ matrix.backend.cmake_flags }} \
+            ${{ env.CMAKE_BASE_ARGS }}
+
+      - run: cmake --build build -j $(nproc)
+
+      - run: |
+          cp LICENSE ./build/bin/
+          tar -czvf turboquant-plus-${{ inputs.release_tag || github.ref_name }}-${{ matrix.backend.artifact_suffix }}.tar.gz \
+            --transform "s,^\.,turboquant-plus-${{ inputs.release_tag || github.ref_name }}," -C ./build/bin .
+
+      - uses: actions/upload-artifact@v6
+        with:
+          name: ${{ matrix.backend.artifact_suffix }}
+          path: turboquant-plus-${{ inputs.release_tag || github.ref_name }}-${{ matrix.backend.artifact_suffix }}.tar.gz
+
+  linux-x86:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ inputs.source_ref || github.ref_name }}
+          fetch-depth: 0
+
+      - run: |
+          sudo dpkg --add-architecture i386
+          sudo apt-get update
+          sudo apt-get install -y build-essential gcc-multilib g++-multilib
+
+      - run: |
+          cmake -B build \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_C_FLAGS="-m32" \
+            -DCMAKE_CXX_FLAGS="-m32" \
+            -DCMAKE_INSTALL_RPATH='$ORIGIN' \
+            -DCMAKE_BUILD_WITH_INSTALL_RPATH=ON \
+            -DGGML_NATIVE=OFF \
+            -DGGML_OPENMP=OFF \
+            -DLLAMA_OPENSSL=OFF \
+            ${{ env.CMAKE_BASE_ARGS }}
+
+      - run: cmake --build build --config Release -j $(nproc)
+
+      - run: |
+          cp LICENSE ./build/bin/
+          tar -czvf turboquant-plus-${{ inputs.release_tag || github.ref_name }}-linux-x86-cpu.tar.gz \
+            --transform "s,^\.,turboquant-plus-${{ inputs.release_tag || github.ref_name }}," -C ./build/bin .
+
+      - uses: actions/upload-artifact@v6
+        with:
+          name: linux-x86-cpu
+          path: turboquant-plus-${{ inputs.release_tag || github.ref_name }}-linux-x86-cpu.tar.gz
+
+  linux-arm32:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ inputs.source_ref || github.ref_name }}
+          fetch-depth: 0
+
+      - run: |
+          sudo dpkg --add-architecture armhf
+          cat << EOF | sudo tee /etc/apt/sources.list.d/armhf-ports.list
+          deb [arch=armhf] http://ports.ubuntu.com/ubuntu-ports/ jammy main universe
+          deb [arch=armhf] http://ports.ubuntu.com/ubuntu-ports/ jammy-updates main universe
+          deb [arch=armhf] http://ports.ubuntu.com/ubuntu-ports/ jammy-security main universe
+          EOF
+          sudo apt-get update || true
+          sudo apt-get install -y build-essential gcc-arm-linux-gnueabihf g++-arm-linux-gnueabihf
+
+      - run: |
+          cmake -B build \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_SYSTEM_NAME=Linux \
+            -DCMAKE_SYSTEM_PROCESSOR=arm \
+            -DCMAKE_C_COMPILER=arm-linux-gnueabihf-gcc \
+            -DCMAKE_CXX_COMPILER=arm-linux-gnueabihf-g++ \
+            -DCMAKE_INSTALL_RPATH='$ORIGIN' \
+            -DCMAKE_BUILD_WITH_INSTALL_RPATH=ON \
+            -DGGML_NATIVE=OFF \
+            -DGGML_OPENMP=OFF \
+            -DLLAMA_OPENSSL=OFF \
+            ${{ env.CMAKE_BASE_ARGS }}
+
+      - run: cmake --build build --config Release -j $(nproc)
+
+      - run: |
+          cp LICENSE ./build/bin/
+          tar -czvf turboquant-plus-${{ inputs.release_tag || github.ref_name }}-linux-arm32-cpu.tar.gz \
+            --transform "s,^\.,turboquant-plus-${{ inputs.release_tag || github.ref_name }}," -C ./build/bin .
+
+      - uses: actions/upload-artifact@v6
+        with:
+          name: linux-arm32-cpu
+          path: turboquant-plus-${{ inputs.release_tag || github.ref_name }}-linux-arm32-cpu.tar.gz
+
+  windows-x86_64:
+    strategy:
+      fail-fast: false
+      matrix:
+        backend:
+          - name: cpu
+            cmake_defines: '-G "Ninja Multi-Config" -D CMAKE_TOOLCHAIN_FILE=cmake/x64-windows-llvm.cmake -DGGML_BACKEND_DL=ON -DGGML_CPU_ALL_VARIANTS=ON -DGGML_NATIVE=OFF'
+            artifact_suffix: windows-x64-cpu
+          - name: vulkan
+            cmake_defines: '-G "Ninja Multi-Config" -D CMAKE_TOOLCHAIN_FILE=cmake/x64-windows-llvm.cmake -DGGML_BACKEND_DL=ON -DGGML_CPU_ALL_VARIANTS=ON -DGGML_VULKAN=ON -DGGML_NATIVE=OFF'
+            artifact_suffix: windows-x64-vulkan
+    runs-on: windows-2022
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ inputs.source_ref || github.ref_name }}
+          fetch-depth: 0
+
+      - run: choco install ninja
+
+      - if: ${{ matrix.backend.name == 'vulkan' }}
+        run: |
+          curl.exe -o $env:RUNNER_TEMP\VulkanSDK-Installer.exe -L "https://sdk.lunarg.com/sdk/download/${env:VULKAN_VERSION}/windows/vulkansdk-windows-X64-${env:VULKAN_VERSION}.exe"
+          & "$env:RUNNER_TEMP\VulkanSDK-Installer.exe" --accept-licenses --default-answer --confirm-command install
+          Add-Content $env:GITHUB_ENV "VULKAN_SDK=C:\VulkanSDK\${env:VULKAN_VERSION}"
+          Add-Content $env:GITHUB_PATH "C:\VulkanSDK\${env:VULKAN_VERSION}\bin"
+
+      - run: cmake -S . -B build ${{ matrix.backend.cmake_defines }} ${{ env.CMAKE_BASE_ARGS }}
+
+      - run: cmake --build build --config Release -j ${env:NUMBER_OF_PROCESSORS}
+
+      - run: |
+          cp LICENSE ./build/bin/Release/
+          7z a turboquant-plus-${{ inputs.release_tag || github.ref_name }}-${{ matrix.backend.artifact_suffix }}.zip .\build\bin\Release\*
+
+      - uses: actions/upload-artifact@v6
+        with:
+          name: ${{ matrix.backend.artifact_suffix }}
+          path: turboquant-plus-${{ inputs.release_tag || github.ref_name }}-${{ matrix.backend.artifact_suffix }}.zip
+
+  windows-x86:
+    runs-on: windows-2022
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ inputs.source_ref || github.ref_name }}
+          fetch-depth: 0
+
+      - run: choco install ninja
+
+      - run: |
+          cmake -S . -B build `
+            -G "Ninja Multi-Config" `
+            -D CMAKE_TOOLCHAIN_FILE=cmake/x86-windows-llvm.cmake `
+            -DGGML_NATIVE=OFF `
+            ${{ env.CMAKE_BASE_ARGS }}
+
+      - run: cmake --build build --config Release -j ${env:NUMBER_OF_PROCESSORS}
+
+      - run: |
+          cp LICENSE ./build/bin/Release/
+          7z a turboquant-plus-${{ inputs.release_tag || github.ref_name }}-windows-x86-cpu.zip .\build\bin\Release\*
+
+      - uses: actions/upload-artifact@v6
+        with:
+          name: windows-x86-cpu
+          path: turboquant-plus-${{ inputs.release_tag || github.ref_name }}-windows-x86-cpu.zip
+
+  windows-arm64:
+    runs-on: windows-2022
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ inputs.source_ref || github.ref_name }}
+          fetch-depth: 0
+
+      - run: choco install ninja
+
+      - run: |
+          cmake -S . -B build `
+            -G "Ninja Multi-Config" `
+            -D CMAKE_TOOLCHAIN_FILE=cmake/arm64-windows-llvm.cmake `
+            -DGGML_NATIVE=OFF `
+            ${{ env.CMAKE_BASE_ARGS }}
+
+      - run: cmake --build build --config Release -j ${env:NUMBER_OF_PROCESSORS}
+
+      - run: |
+          cp LICENSE ./build/bin/Release/
+          7z a turboquant-plus-${{ inputs.release_tag || github.ref_name }}-windows-arm64-cpu.zip .\build\bin\Release\*
+
+      - uses: actions/upload-artifact@v6
+        with:
+          name: windows-arm64-cpu
+          path: turboquant-plus-${{ inputs.release_tag || github.ref_name }}-windows-arm64-cpu.zip
+
+  windows-cuda:
+    strategy:
+      fail-fast: false
+      matrix:
+        cuda: ['12.4']
+    runs-on: windows-2022
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ inputs.source_ref || github.ref_name }}
+          fetch-depth: 0
+
+      - uses: ./.github/actions/windows-setup-cuda
+        with:
+          cuda_version: ${{ matrix.cuda }}
+
+      - run: choco install ninja
+
+      - shell: cmd
+        run: |
+          call "C:\Program Files\Microsoft Visual Studio\2022\Enterprise\VC\Auxiliary\Build\vcvarsall.bat" x64
+          cmake -S . -B build -G "Ninja Multi-Config" ^
+            -DGGML_NATIVE=OFF ^
+            -DGGML_CUDA=ON ^
+            -DGGML_CUDA_FA_ALL_QUANTS=ON ^
+            ${{ env.CMAKE_BASE_ARGS }}
+          set /A NINJA_JOBS=%NUMBER_OF_PROCESSORS%-1
+          cmake --build build --config Release -j %NINJA_JOBS%
+
+      - run: |
+          cp LICENSE ./build/bin/Release/
+          $dst='.\build\bin\Release\'
+          robocopy "${{env.CUDA_PATH}}\bin" $dst cudart64_*.dll cublas64_*.dll cublasLt64_*.dll
+          robocopy "${{env.CUDA_PATH}}\lib" $dst cudart64_*.dll cublas64_*.dll cublasLt64_*.dll
+          robocopy "${{env.CUDA_PATH}}\bin\x64" $dst cudart64_*.dll cublas64_*.dll cublasLt64_*.dll
+          7z a turboquant-plus-${{ inputs.release_tag || github.ref_name }}-windows-x64-cuda${{ matrix.cuda }}.zip .\build\bin\Release\*
+
+      - uses: actions/upload-artifact@v6
+        with:
+          name: windows-x64-cuda${{ matrix.cuda }}
+          path: turboquant-plus-${{ inputs.release_tag || github.ref_name }}-windows-x64-cuda${{ matrix.cuda }}.zip
+
+  linux-cuda:
+    strategy:
+      fail-fast: false
+      matrix:
+        cuda: ['12.4']
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ inputs.source_ref || github.ref_name }}
+          fetch-depth: 0
+
+      - run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential libssl-dev
+
+      - run: |
+          wget -q https://developer.download.nvidia.com/compute/cuda/repos/ubuntu2204/x86_64/cuda-keyring_1.1-1_all.deb
+          sudo dpkg -i cuda-keyring_1.1-1_all.deb
+          sudo apt-get update
+          sudo apt-get install -y cuda-toolkit-12-4
+          echo "CUDA_PATH=/usr/local/cuda-${{ matrix.cuda }}" >> "$GITHUB_ENV"
+          echo "/usr/local/cuda-${{ matrix.cuda }}/bin" >> "$GITHUB_PATH"
+
+      - run: |
+          cmake -B build \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_INSTALL_RPATH='$ORIGIN' \
+            -DCMAKE_BUILD_WITH_INSTALL_RPATH=ON \
+            -DGGML_CUDA=ON \
+            -DGGML_CUDA_FA_ALL_QUANTS=ON \
+            -DGGML_NATIVE=OFF \
+            ${{ env.CMAKE_BASE_ARGS }}
+
+      - run: cmake --build build --config Release -j $(nproc)
+
+      - run: |
+          cp LICENSE ./build/bin/
+          tar -czvf turboquant-plus-${{ inputs.release_tag || github.ref_name }}-linux-x64-cuda${{ matrix.cuda }}.tar.gz \
+            --transform "s,^\.,turboquant-plus-${{ inputs.release_tag || github.ref_name }}," -C ./build/bin .
+
+      - uses: actions/upload-artifact@v6
+        with:
+          name: linux-x64-cuda${{ matrix.cuda }}
+          path: turboquant-plus-${{ inputs.release_tag || github.ref_name }}-linux-x64-cuda${{ matrix.cuda }}.tar.gz
+
+  release:
+    needs:
+      - linux-x86_64
+      - linux-arm64
+      - linux-x86
+      - linux-arm32
+      - windows-x86_64
+      - windows-x86
+      - windows-arm64
+      - windows-cuda
+      - linux-cuda
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v7
+        with:
+          path: ./release
+          merge-multiple: true
+
+      - uses: softprops/action-gh-release@v2
+        if: ${{ startsWith(github.ref, 'refs/tags/') }}
+        with:
+          tag_name: ${{ github.ref_name }}
+          name: TurboQuant+ ${{ github.ref_name }}
+          files: ./release/*
+          draft: false
+          prerelease: false
+
+      - if: ${{ github.event_name == 'workflow_dispatch' }}
+        uses: actions/upload-artifact@v6
+        with:
+          name: all-artifacts
+          path: ./release/*

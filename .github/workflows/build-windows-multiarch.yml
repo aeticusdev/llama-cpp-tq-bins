@@ -1,0 +1,147 @@
+name: Windows Multi-Arch Build
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - master
+      - 'feature/**'
+    paths:
+      - '.github/workflows/build-windows-multiarch.yml'
+      - '**/CMakeLists.txt'
+      - '**/.cmake'
+      - '**/*.h'
+      - '**/*.hpp'
+      - '**/*.c'
+      - '**/*.cpp'
+  pull_request:
+    types: [opened, synchronize, reopened]
+    paths:
+      - '**/CMakeLists.txt'
+      - 'ggml/src/ggml-vulkan/**'
+      - 'ggml/src/ggml-cpu/**'
+  schedule:
+    - cron: '0 6 * * 0'
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.head_ref && github.ref || github.run_id }}
+  cancel-in-progress: true
+
+env:
+  CMAKE_BASE_ARGS: "-DLLAMA_BUILD_EXAMPLES=OFF -DLLAMA_BUILD_TESTS=OFF -DLLAMA_BUILD_TOOLS=ON -DLLAMA_BUILD_SERVER=ON -DGGML_NATIVE=OFF"
+  VULKAN_VERSION: 1.4.313.2
+
+jobs:
+  windows-x86_64:
+    strategy:
+      fail-fast: false
+      matrix:
+        backend:
+          - name: cpu
+            cmake_defines: '-G "Ninja Multi-Config" -D CMAKE_TOOLCHAIN_FILE=cmake/x64-windows-llvm.cmake -DGGML_BACKEND_DL=ON -DGGML_CPU_ALL_VARIANTS=ON'
+            artifact_suffix: windows-x64-cpu
+          - name: vulkan
+            cmake_defines: '-G "Ninja Multi-Config" -D CMAKE_TOOLCHAIN_FILE=cmake/x64-windows-llvm.cmake -DGGML_BACKEND_DL=ON -DGGML_CPU_ALL_VARIANTS=ON -DGGML_VULKAN=ON'
+            artifact_suffix: windows-x64-vulkan
+    runs-on: windows-2022
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - run: choco install ninja
+
+      - if: ${{ matrix.backend.name == 'vulkan' }}
+        run: |
+          curl.exe -o $env:RUNNER_TEMP\VulkanSDK-Installer.exe -L "https://sdk.lunarg.com/sdk/download/${env:VULKAN_VERSION}/windows/vulkansdk-windows-X64-${env:VULKAN_VERSION}.exe"
+          & "$env:RUNNER_TEMP\VulkanSDK-Installer.exe" --accept-licenses --default-answer --confirm-command install
+          Add-Content $env:GITHUB_ENV "VULKAN_SDK=C:\VulkanSDK\${env:VULKAN_VERSION}"
+          Add-Content $env:GITHUB_PATH "C:\VulkanSDK\${env:VULKAN_VERSION}\bin"
+
+      - uses: ggml-org/ccache-action@v1.2.21
+        with:
+          key: windows-${{ matrix.backend.artifact_suffix }}
+          variant: ccache
+          evict-old-files: 1d
+          save: ${{ github.event_name == 'push' && github.ref == 'refs/heads/master' }}
+
+      - run: cmake -S . -B build ${{ matrix.backend.cmake_defines }} ${{ env.CMAKE_BASE_ARGS }}
+
+      - run: cmake --build build --config Release -j ${env:NUMBER_OF_PROCESSORS}
+
+      - run: |
+          cp LICENSE ./build/bin/Release/
+          7z a turboquant-plus-${{ github.ref_name }}-${{ matrix.backend.artifact_suffix }}.zip .\build\bin\Release\*
+
+      - uses: actions/upload-artifact@v6
+        with:
+          name: ${{ matrix.backend.artifact_suffix }}
+          path: turboquant-plus-${{ github.ref_name }}-${{ matrix.backend.artifact_suffix }}.zip
+
+  windows-arm64:
+    runs-on: windows-2022
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - run: choco install ninja
+
+      - uses: ggml-org/ccache-action@v1.2.21
+        with:
+          key: windows-arm64-cpu
+          variant: ccache
+          evict-old-files: 1d
+          save: ${{ github.event_name == 'push' && github.ref == 'refs/heads/master' }}
+
+      - run: |
+          cmake -S . -B build `
+            -G "Ninja Multi-Config" `
+            -D CMAKE_TOOLCHAIN_FILE=cmake/arm64-windows-llvm.cmake `
+            -DGGML_NATIVE=OFF `
+            ${{ env.CMAKE_BASE_ARGS }}
+
+      - run: cmake --build build --config Release -j ${env:NUMBER_OF_PROCESSORS}
+
+      - run: |
+          cp LICENSE ./build/bin/Release/
+          7z a turboquant-plus-${{ github.ref_name }}-windows-arm64-cpu.zip .\build\bin\Release\*
+
+      - uses: actions/upload-artifact@v6
+        with:
+          name: windows-arm64-cpu
+          path: turboquant-plus-${{ github.ref_name }}-windows-arm64-cpu.zip
+
+  windows-x86:
+    runs-on: windows-2022
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - run: choco install ninja
+
+      - uses: ggml-org/ccache-action@v1.2.21
+        with:
+          key: windows-x86-cpu
+          variant: ccache
+          evict-old-files: 1d
+          save: ${{ github.event_name == 'push' && github.ref == 'refs/heads/master' }}
+
+      - run: |
+          cmake -S . -B build `
+            -G "Ninja Multi-Config" `
+            -D CMAKE_TOOLCHAIN_FILE=cmake/x86-windows-llvm.cmake `
+            -DGGML_NATIVE=OFF `
+            ${{ env.CMAKE_BASE_ARGS }}
+
+      - run: cmake --build build --config Release -j ${env:NUMBER_OF_PROCESSORS}
+
+      - run: |
+          cp LICENSE ./build/bin/Release/
+          7z a turboquant-plus-${{ github.ref_name }}-windows-x86-cpu.zip .\build\bin\Release\*
+
+      - uses: actions/upload-artifact@v6
+        with:
+          name: windows-x86-cpu
+          path: turboquant-plus-${{ github.ref_name }}-windows-x86-cpu.zip
