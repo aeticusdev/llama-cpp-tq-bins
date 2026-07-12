@@ -325,9 +325,17 @@ jobs:
           Add-Content $env:GITHUB_PATH "C:\VulkanSDK\1.4.350.0\bin"
 
       - run: |
-          mkdir -Force tools\ui\dist
-          Set-Content -Path tools\ui\dist\index.html -Value '<!DOCTYPE html><html><head><title>llama.cpp</title></head><body>llama.cpp server</body></html>'
-          Set-Content -Path tools\ui\dist\loading.html -Value '<!DOCTYPE html><html><head><title>Loading...</title></head><body>Loading...</body></html>'
+          $dist = 'tools\ui\dist'
+          mkdir -Force $dist
+          $files = @(
+            'index.html','loading.html','build.json','version.json',
+            'manifest.webmanifest','sw.js',
+            'favicon.ico','favicon.svg','favicon-dark.ico','favicon-dark.svg',
+            'pwa-64x64.png','pwa-192x192.png','pwa-512x512.png',
+            'maskable-icon-512x512.png',
+            'bundle.js','bundle.css','workbox.js'
+          )
+          foreach ($f in $files) { Set-Content -Path "$dist\$f" -Value ' ' }
 
       - run: |
           cmake -S . -B build `
